@@ -14,7 +14,8 @@ export enum EVENT {
   UPDATE = 'update',
   DELETE = 'delete',
   ERROR = 'error',
-  BOOKMARK = 'bookmark'
+  BOOKMARK = 'bookmark',
+  CONNECT = 'connect'
 }
 
 export class SimpleTransform extends Transform {
@@ -68,13 +69,13 @@ export class Informer<T> {
     })
   }
 
-  public start(): void {
+  public async start(): Promise<void> {
     if (this.started) {
       console.warn('informer has already started')
       return
     }
     this.started = true
-    this.makeWatchRequest()
+    await this.makeWatchRequest()
   }
 
   public stop(): void {
@@ -82,7 +83,10 @@ export class Informer<T> {
     this.controller.abort()
   }
 
-  private makeWatchRequest(): void {
+  private async makeWatchRequest(): Promise<void> {
+    if (!this.resourceVersion && this.enableCache) {
+      this.resourceVersion = await this.cache?.processListRequest(this.listFn)
+    }
     const cluster = this.kubeConfig.getCurrentCluster()
 
     const opts: https.RequestOptions = {}
@@ -98,7 +102,7 @@ export class Informer<T> {
     const simpleTransform = new SimpleTransform()
 
     const httpsAgent = new Agent({
-      keepAlive: false,
+      keepAlive: true,
       ca: opts.ca,
       cert: opts.cert,
       key: opts.key,
@@ -107,12 +111,6 @@ export class Informer<T> {
 
     const url = cluster?.server + this.path + '?' + params
 
-    // unsure why abort does not cause axios to do the right thing
-    // when we destroy the http agent it closes all connections
-    this.controller.signal.addEventListener('abort', () => {
-      console.log('destroying https agent')
-      httpsAgent.destroy()
-    })
     const headers = new Headers()
 
     for (const key in opts.headers) {
@@ -130,17 +128,25 @@ export class Informer<T> {
     })
       .then((response) => {
         if (response.body !== null) {
+          this.events.emit('connect')
           response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
           response.body
             .on('end', () => console.log('request end'))
             .on('close', () => console.log('request close'))
             .on('aborted', () => console.log('request aborted'))
-            .on('error', (err) => console.log(err, 'Caught error here!'))
+            .on('error', (err: Error) => {
+              if (err.name !== 'AbortError') {
+                console.log(err, 'Caught error here!')
+                this.events.emit('error', err)
+              }
+            })
         }
       })
       .catch((err) => {
-        httpsAgent.destroy()
         console.error(err)
+      })
+      .finally(() => {
+        httpsAgent.destroy()
       })
   }
 
@@ -162,9 +168,12 @@ export class Informer<T> {
         this.cache && this.cache.deleteObject(obj)
         this.events.emit(phase, obj)
         break
-      case 'BOOKMARK':
+      case EVENT.BOOKMARK:
         // nothing to do, here for documentation, mostly.
         break
+    }
+    if (watchObj && watchObj.metadata) {
+      this.resourceVersion = watchObj.metadata.resourceVersion
     }
   }
 }
