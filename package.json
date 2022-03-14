@@ -1,6 +1,6 @@
 {
   "name": "kubernetes-enhanced-informer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Informer for kubernete based axios",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
