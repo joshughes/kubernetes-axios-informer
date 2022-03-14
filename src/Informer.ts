@@ -145,8 +145,6 @@ export class Informer<T> {
       })
       .catch((err) => {
         console.error(err)
-      })
-      .finally(() => {
         httpsAgent.destroy()
       })
   }

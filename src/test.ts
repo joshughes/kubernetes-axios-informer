@@ -10,8 +10,11 @@ async function main() {
   const api = kc.makeApiClient(k8s.CoreV1Api)
 
   const informer = new Informer('/api/v1/namespaces', api.listNamespace, kc, false)
-  informer.events.on(EVENT.UPDATE, (event) => {
-    console.log({ event })
+  // informer.events.on(EVENT.UPDATE, (event) => {
+  //   console.log({ event })
+  // })
+  informer.stream.on('data', (streamData) => {
+    console.log({ streamData })
   })
 
   informer.start()
@@ -19,7 +22,7 @@ async function main() {
     console.log('Stopping')
     informer.stop()
     console.log('Stopped')
-  }, 10000)
+  }, 100000)
 }
 
 main()
