@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { KubernetesObject, ListPromise } from '@kubernetes/client-node'
 
 export type ObjectCallback<T extends KubernetesObject> = (obj: T) => void

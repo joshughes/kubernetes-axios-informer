@@ -2,6 +2,7 @@
 import { ListPromise } from '@kubernetes/client-node'
 import { Cache } from './Cache'
 import { PassThrough, Transform, TransformOptions } from 'stream'
+import { AbortController } from 'node-abort-controller'
 import { Agent } from 'https'
 import * as k8s from '@kubernetes/client-node'
 import * as https from 'https'
