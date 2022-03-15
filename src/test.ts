@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 
 import * as k8s from '@kubernetes/client-node'
+import { Stream, Readable, PassThrough } from 'stream'
 import { Informer, EVENT } from './Informer'
 
 async function main() {
@@ -13,16 +14,21 @@ async function main() {
   // informer.events.on(EVENT.UPDATE, (event) => {
   //   console.log({ event })
   // })
-  informer.stream.on('data', (streamData) => {
-    console.log({ streamData })
+  // informer.stream.on('data', (streamData) => {
+  //   console.log({ streamData })
+  // })
+
+  informer.events.on(EVENT.ERROR, async (error) => {
+    console.log({ error }, 'FOUND ERROR')
+    informer.stop()
+    await informer.start()
+  })
+
+  informer.events.on(EVENT.CONNECT, () => {
+    console.log('CONNECTED')
   })
 
   informer.start()
-  setTimeout(() => {
-    console.log('Stopping')
-    informer.stop()
-    console.log('Stopped')
-  }, 100000)
 }
 
 main()

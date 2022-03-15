@@ -97,6 +97,10 @@ export class Informer<T> {
       watch: 'true'
     })
 
+    if (this.resourceVersion) {
+      params.append('resourceVersion', this.resourceVersion)
+    }
+
     this.kubeConfig.applytoHTTPSOptions(opts)
 
     const stream = byline.createStream()
@@ -133,7 +137,11 @@ export class Informer<T> {
           response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
           response.body
             .on('end', () => console.log('request end'))
-            .on('close', () => console.log('request close'))
+            .on('close', async () => {
+              if (this.started) {
+                await this.makeWatchRequest()
+              }
+            })
             .on('aborted', () => console.log('request aborted'))
             .on('error', (err: Error) => {
               if (err.name !== 'AbortError') {
@@ -169,9 +177,13 @@ export class Informer<T> {
         break
       case EVENT.BOOKMARK:
         // nothing to do, here for documentation, mostly.
+        if (watchObj.object?.metadata?.resourceVersion) {
+          this.resourceVersion = watchObj.object?.metadata?.resourceVersion
+        }
         break
     }
-    if (watchObj && watchObj.metadata) {
+    if (watchObj?.metadata) {
+      console.log(`Updating resourceVersion to ${watchObj.metadata.resourceVersion}`)
       this.resourceVersion = watchObj.metadata.resourceVersion
     }
   }
