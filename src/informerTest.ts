@@ -8,7 +8,7 @@ async function main() {
   const listFn = () => coreApi.listNamespace()
   const informer = new Informer('/api/v1/namespaces', listFn, kc, false)
 
-  informer.events.on(EVENT.UPDATE, (object: k8s.V1Namespace) => {
+  informer.events.on(EVENT.UPDATED, (object: k8s.V1Namespace) => {
     // eslint-disable-next-line no-console
     console.log(`Got and update for ${object?.metadata?.name}`)
   })
