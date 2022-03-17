@@ -11,9 +11,9 @@ import * as EventEmitter from 'events'
 import * as byline from 'byline'
 
 export enum EVENT {
-  ADD = 'ADD',
-  UPDATE = 'UPDATE',
-  DELETE = 'DELETE',
+  ADDED = 'ADDED',
+  UPDATED = 'UPDATED',
+  DELETED = 'DELETED',
   ERROR = 'ERROR',
   BOOKMARK = 'BOOKMARK',
   CONNECT = 'CONNECT'
@@ -27,19 +27,10 @@ export class SimpleTransform extends Transform {
 
   _transform(chunk: any, encoding: any, callback: any) {
     const data = JSON.parse(chunk)
-    let phase: EVENT = EVENT.ADD
+    let phase: EVENT = data.type
     switch (data.type) {
-      case 'ADDED':
-        phase = EVENT.ADD
-        break
       case 'MODIFIED':
-        phase = EVENT.UPDATE
-        break
-      case 'DELETED':
-        phase = EVENT.DELETE
-        break
-      case 'BOOKMARK':
-        phase = EVENT.BOOKMARK
+        phase = EVENT.UPDATED
         break
     }
     this.push({ phase, object: data.object, watchObj: data })
@@ -163,15 +154,15 @@ export class Informer<T> {
 
   private watchHandler(phase: string, obj: T, watchObj?: any): void {
     switch (phase) {
-      case EVENT.ADD:
+      case EVENT.ADDED:
         this.cache && this.cache.addOrUpdateObject(obj)
         this.events.emit(phase, obj)
         break
-      case EVENT.UPDATE:
+      case EVENT.UPDATED:
         this.cache && this.cache.addOrUpdateObject(obj)
         this.events.emit(phase, obj)
         break
-      case EVENT.DELETE:
+      case EVENT.DELETED:
         this.cache && this.cache.deleteObject(obj)
         this.events.emit(phase, obj)
         break
