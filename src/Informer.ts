@@ -11,12 +11,12 @@ import * as EventEmitter from 'events'
 import * as byline from 'byline'
 
 export enum EVENT {
-  ADD = 'add',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  ERROR = 'error',
-  BOOKMARK = 'bookmark',
-  CONNECT = 'connect'
+  ADD = 'ADD',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  ERROR = 'ERROR',
+  BOOKMARK = 'BOOKMARK',
+  CONNECT = 'CONNECT'
 }
 
 export class SimpleTransform extends Transform {
