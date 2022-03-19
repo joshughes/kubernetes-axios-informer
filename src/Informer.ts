@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { ListPromise } from '@kubernetes/client-node'
 import { Cache } from './Cache'
-import { PassThrough, Transform, TransformOptions } from 'stream'
+import { PassThrough, Transform } from 'stream'
 import { AbortController } from 'node-abort-controller'
 import { Agent } from 'https'
 import * as k8s from '@kubernetes/client-node'
@@ -19,21 +19,28 @@ export enum EVENT {
   CONNECT = 'CONNECT'
 }
 
+type AddFunction = (k8Object: k8s.KubernetesObject) => boolean
+
 export class SimpleTransform extends Transform {
-  constructor() {
-    const options: TransformOptions = { objectMode: true }
-    super(options)
+  constructor(private addFunction: AddFunction) {
+    super({ objectMode: true })
   }
 
   _transform(chunk: any, encoding: any, callback: any) {
     const data = JSON.parse(chunk)
+    let pushChunk = true
     let phase: EVENT = data.type
     switch (data.type) {
       case 'MODIFIED':
         phase = EVENT.UPDATED
         break
+      case EVENT.ADDED:
+        pushChunk = this.addFunction(data.object)
+        break
     }
-    this.push({ phase, object: data.object, watchObj: data })
+    if (pushChunk) {
+      this.push({ phase, object: data.object, watchObj: data })
+    }
     callback()
   }
 }
@@ -44,6 +51,7 @@ export class Informer<T> {
   stream = new PassThrough({ objectMode: true })
   private started = false
   private resourceVersion: string | undefined = undefined
+  private itemSet: Set<string> = new Set()
 
   public cache: Cache<T> | null = null
 
@@ -75,9 +83,33 @@ export class Informer<T> {
     this.controller.abort()
   }
 
+  private getSetKey(object: k8s.KubernetesObject): string {
+    return `${object.metadata?.namespace}-${object.metadata?.name}}`
+  }
+
+  private emiteAdded(object: k8s.KubernetesObject): boolean {
+    const key = this.getSetKey(object)
+    if (this.itemSet.has(key)) {
+      return false
+    } else {
+      this.itemSet.add(key)
+      return true
+    }
+  }
+
+  private async prepareItemSet() {
+    const response = await this.listFn()
+    const items: k8s.KubernetesObject[] = response.body.items
+    for (const item of items) {
+      this.itemSet.add(this.getSetKey(item))
+    }
+  }
+
   private async makeWatchRequest(): Promise<void> {
     if (!this.resourceVersion && this.enableCache) {
       this.resourceVersion = await this.cache?.processListRequest(this.listFn)
+    } else {
+      await this.prepareItemSet()
     }
     const cluster = this.kubeConfig.getCurrentCluster()
 
@@ -95,7 +127,8 @@ export class Informer<T> {
     this.kubeConfig.applytoHTTPSOptions(opts)
 
     const stream = byline.createStream()
-    const simpleTransform = new SimpleTransform()
+    const addFunction: AddFunction = (object: k8s.KubernetesObject) => this.emiteAdded(object)
+    const simpleTransform = new SimpleTransform(addFunction)
 
     const httpsAgent = new Agent({
       keepAlive: true,

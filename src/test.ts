@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
 import * as k8s from '@kubernetes/client-node'
-import { Stream, Readable, PassThrough } from 'stream'
+// import { Stream, Readable, PassThrough } from 'stream'
 import { Informer, EVENT } from './Informer'
 
 async function main() {
@@ -10,13 +10,15 @@ async function main() {
 
   const api = kc.makeApiClient(k8s.CoreV1Api)
 
-  const informer = new Informer('/api/v1/namespaces', api.listNamespace, kc, false)
+  const listFn = () => api.listNamespace()
+
+  const informer = new Informer('/api/v1/namespaces', listFn, kc, false)
   // informer.events.on(EVENT.UPDATE, (event) => {
   //   console.log({ event })
   // })
-  // informer.stream.on('data', (streamData) => {
-  //   console.log({ streamData })
-  // })
+  informer.stream.on('data', (streamData) => {
+    console.log({ streamData })
+  })
 
   informer.events.on(EVENT.ERROR, async (error) => {
     console.log({ error }, 'FOUND ERROR')
