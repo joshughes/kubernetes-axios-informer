@@ -43,7 +43,6 @@ export class Informer<T> {
   events = new EventEmitter()
   stream = new PassThrough({ objectMode: true })
   private started = false
-  private resourceVersion: string | undefined = undefined
 
   public cache: Cache<T> | null = null
 
@@ -51,7 +50,8 @@ export class Informer<T> {
     private readonly path: string,
     private listFn: ListPromise<T>,
     private kubeConfig: k8s.KubeConfig,
-    private enableCache: boolean = true
+    private enableCache: boolean = true,
+    private resourceVersion?: string
   ) {
     if (this.enableCache) {
       this.cache = new Cache<T>()
@@ -66,8 +66,9 @@ export class Informer<T> {
       console.warn('informer has already started')
       return
     }
-    this.started = true
+    this.controller = new AbortController()
     await this.makeWatchRequest()
+    this.started = true
   }
 
   public stop(): void {
@@ -80,9 +81,9 @@ export class Informer<T> {
   }
 
   private async makeWatchRequest(): Promise<void> {
-    if (!this.resourceVersion && this.enableCache) {
+    if (this.enableCache) {
       this.resourceVersion = await this.cache?.processListRequest(this.listFn)
-    } else {
+    } else if (!this.resourceVersion) {
       const response = await this.listFn()
       this.resourceVersion = response.body.metadata?.resourceVersion || ''
     }
@@ -123,36 +124,33 @@ export class Informer<T> {
       }
     }
     console.log(url)
-    fetch(url, {
+    const fetchRequest = fetch(url, {
       method: 'GET',
       headers,
       signal: this.controller.signal,
       agent: httpsAgent
     })
-      .then((response) => {
-        if (response.body !== null) {
-          this.events.emit('connect')
-          response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
-          response.body
-            .on('end', () => console.log('request end'))
-            .on('close', async () => {
-              if (this.started) {
-                await this.makeWatchRequest()
-              }
-            })
-            .on('aborted', () => console.log('request aborted'))
-            .on('error', (err: Error) => {
-              if (err.name !== 'AbortError') {
-                console.log(err, 'Caught error here!')
-                this.events.emit('error', err)
-              }
-            })
-        }
-      })
-      .catch((err) => {
-        console.error(err)
-        httpsAgent.destroy()
-      })
+    fetchRequest.then((response) => {
+      if (response.body !== null) {
+        this.events.emit('connect')
+        response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
+        response.body
+          .on('end', () => console.log('request end'))
+          .on('close', async () => {
+            if (this.started) {
+              await this.makeWatchRequest()
+            }
+          })
+          .on('error', async (err: any) => {
+            if (err?.type !== 'aborted') {
+              console.log(err, 'Caught error here!')
+              this.events.emit('error', err)
+            } else {
+              console.log('Abort all good')
+            }
+          })
+      }
+    })
   }
 
   private handleError(err) {
@@ -177,6 +175,18 @@ export class Informer<T> {
         // nothing to do, here for documentation, mostly.
         if (watchObj.object?.metadata?.resourceVersion) {
           this.resourceVersion = watchObj.object?.metadata?.resourceVersion
+        }
+        break
+      case EVENT.ERROR:
+        const error: any = obj
+        if (error.code !== 410) {
+          this.events.emit(phase, obj)
+        } else {
+          this.resourceVersion = ''
+          this.stop()
+          this.start().then(() => {
+            console.log('Restarted due to 410')
+          })
         }
         break
     }

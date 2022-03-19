@@ -12,7 +12,7 @@ async function main() {
 
   const listFn = () => api.listNamespace()
 
-  const informer = new Informer('/api/v1/namespaces', listFn, kc, false)
+  const informer = new Informer('/api/v1/namespaces', listFn, kc, false, '12323')
   // informer.events.on(EVENT.UPDATE, (event) => {
   //   console.log({ event })
   // })
@@ -20,11 +20,11 @@ async function main() {
     console.log({ streamData })
   })
 
-  informer.events.on(EVENT.ERROR, async (error) => {
-    console.log({ error }, 'FOUND ERROR')
-    informer.stop()
-    await informer.start()
-  })
+  // informer.events.on(EVENT.ERROR, async (error) => {
+  //   console.log({ error }, 'FOUND ERROR')
+  //   informer.stop()
+  //   await informer.start()
+  // })
 
   informer.events.on(EVENT.CONNECT, () => {
     console.log('CONNECTED')
