@@ -84,8 +84,13 @@ export class Informer<T> {
     if (this.enableCache) {
       this.resourceVersion = await this.cache?.processListRequest(this.listFn)
     } else if (!this.resourceVersion) {
-      const response = await this.listFn()
-      this.resourceVersion = response.body.metadata?.resourceVersion || ''
+      try {
+        const response = await this.listFn()
+        this.resourceVersion = response.body.metadata?.resourceVersion || ''
+      } catch (error) {
+        console.log({ error }, 'Error in listfn proceeding withour resourceVersion')
+        this.resourceVersion = undefined
+      }
     }
     const cluster = this.kubeConfig.getCurrentCluster()
 
