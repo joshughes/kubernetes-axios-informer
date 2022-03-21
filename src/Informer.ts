@@ -140,10 +140,15 @@ export class Informer<T> {
         this.events.emit('connect')
         response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
         response.body
-          .on('end', () => console.log('request end'))
           .on('close', async () => {
             if (this.started) {
-              await this.makeWatchRequest()
+              this.started = false
+              setTimeout(async () => {
+                console.log(`Retrying request to ${url}`)
+                if (!this.controller.signal.aborted) {
+                  await this.makeWatchRequest()
+                }
+              }, 1000)
             }
           })
           .on('error', async (err: any) => {
@@ -155,6 +160,11 @@ export class Informer<T> {
             }
           })
       }
+    })
+    fetchRequest.catch((error) => {
+      console.log({ error }, 'Error with main watch request')
+      this.events.emit(EVENT.ERROR, error)
+      httpsAgent.destroy()
     })
   }
 
@@ -180,6 +190,8 @@ export class Informer<T> {
         // nothing to do, here for documentation, mostly.
         if (watchObj.object?.metadata?.resourceVersion) {
           this.resourceVersion = watchObj.object?.metadata?.resourceVersion
+        } else {
+          console.log('BOOKMARK with no resourceVersion')
         }
         break
       case EVENT.ERROR:
@@ -194,10 +206,6 @@ export class Informer<T> {
           })
         }
         break
-    }
-    if (watchObj?.metadata) {
-      console.log(`Updating resourceVersion to ${watchObj.metadata.resourceVersion}`)
-      this.resourceVersion = watchObj.metadata.resourceVersion
     }
   }
 }
