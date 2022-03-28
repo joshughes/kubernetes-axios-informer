@@ -1,14 +1,14 @@
 /* eslint-disable no-console */
-import { ListPromise } from '@kubernetes/client-node'
-import { Cache } from './Cache'
-import { PassThrough, Transform } from 'stream'
-import { AbortController } from 'node-abort-controller'
-import { Agent } from 'https'
-import * as k8s from '@kubernetes/client-node'
-import * as https from 'https'
-import fetch, { Headers } from 'node-fetch'
-import * as EventEmitter from 'events'
-import * as byline from 'byline'
+import { ListPromise } from '@kubernetes/client-node';
+import { Cache } from './Cache';
+import { PassThrough, Transform } from 'stream';
+import { AbortController } from 'node-abort-controller';
+import { Agent } from 'https';
+import * as k8s from '@kubernetes/client-node';
+import * as https from 'https';
+import fetch, { Headers } from 'node-fetch';
+import * as EventEmitter from 'events';
+import * as byline from 'byline';
 
 export enum EVENT {
   ADDED = 'ADDED',
@@ -16,35 +16,36 @@ export enum EVENT {
   DELETED = 'DELETED',
   ERROR = 'ERROR',
   BOOKMARK = 'BOOKMARK',
-  CONNECT = 'CONNECT'
+  CONNECT = 'CONNECT',
+  USER_ABORT = 'USER_ABORT',
 }
 
 export class SimpleTransform extends Transform {
   constructor() {
-    super({ objectMode: true })
+    super({ objectMode: true });
   }
 
   _transform(chunk: any, encoding: any, callback: any) {
-    const data = JSON.parse(chunk)
-    let phase: EVENT = data.type
+    const data = JSON.parse(chunk);
+    let phase: EVENT = data.type;
     switch (data.type) {
       case 'MODIFIED':
-        phase = EVENT.UPDATED
-        break
+        phase = EVENT.UPDATED;
+        break;
     }
 
-    this.push({ phase, object: data.object, watchObj: data })
-    callback()
+    this.push({ phase, object: data.object, watchObj: data });
+    callback();
   }
 }
 
 export class Informer<T> {
-  private controller: AbortController = new AbortController()
-  events = new EventEmitter()
-  stream = new PassThrough({ objectMode: true })
-  private started = false
+  private controller: AbortController = new AbortController();
+  events = new EventEmitter();
+  stream = new PassThrough({ objectMode: true });
+  private started = false;
 
-  public cache: Cache<T> | null = null
+  public cache: Cache<T> | null = null;
 
   public constructor(
     private readonly path: string,
@@ -54,158 +55,154 @@ export class Informer<T> {
     private resourceVersion?: string
   ) {
     if (this.enableCache) {
-      this.cache = new Cache<T>()
+      this.cache = new Cache<T>();
     }
     this.stream.on('data', (watchEvent: any) => {
-      this.watchHandler(watchEvent.phase, watchEvent.object, watchEvent.watchObj)
-    })
+      this.watchHandler(watchEvent.phase, watchEvent.object, watchEvent.watchObj);
+    });
   }
 
   public async start(): Promise<void> {
     if (this.started) {
-      console.warn('informer has already started')
-      return
+      console.warn('informer has already started');
+      return;
     }
-    this.controller = new AbortController()
-    await this.makeWatchRequest()
-    this.started = true
+    this.controller = new AbortController();
+    await this.makeWatchRequest();
+    this.started = true;
   }
 
   public stop(): void {
-    this.started = false
-    this.controller.abort()
+    this.started = false;
+    this.controller.abort();
   }
 
   private getSetKey(object: k8s.KubernetesObject): string {
-    return `${object.metadata?.namespace}-${object.metadata?.name}}`
+    return `${object.metadata?.namespace}-${object.metadata?.name}}`;
   }
 
   private async makeWatchRequest(): Promise<void> {
     if (this.enableCache) {
-      this.resourceVersion = await this.cache?.processListRequest(this.listFn)
+      this.resourceVersion = await this.cache?.processListRequest(this.listFn);
     } else if (!this.resourceVersion) {
       try {
-        const response = await this.listFn()
-        this.resourceVersion = response.body.metadata?.resourceVersion || ''
+        const response = await this.listFn();
+        this.resourceVersion = response.body.metadata?.resourceVersion || '';
       } catch (error) {
-        console.log({ error }, 'Error in listfn proceeding withour resourceVersion')
-        this.resourceVersion = undefined
+        this.events.emit(EVENT.ERROR, error);
+        this.resourceVersion = undefined;
       }
     }
-    const cluster = this.kubeConfig.getCurrentCluster()
+    const cluster = this.kubeConfig.getCurrentCluster();
 
-    const opts: https.RequestOptions = {}
+    const opts: https.RequestOptions = {};
 
     const params: URLSearchParams = new URLSearchParams({
       allowWatchBookmarks: 'true',
-      watch: 'true'
-    })
+      watch: 'true',
+    });
 
     if (this.resourceVersion) {
-      params.append('resourceVersion', this.resourceVersion)
+      params.append('resourceVersion', this.resourceVersion);
     }
 
-    this.kubeConfig.applytoHTTPSOptions(opts)
+    this.kubeConfig.applytoHTTPSOptions(opts);
 
-    const stream = byline.createStream()
-    const simpleTransform = new SimpleTransform()
+    const stream = byline.createStream();
+    const simpleTransform = new SimpleTransform();
 
     const httpsAgent = new Agent({
       keepAlive: true,
       ca: opts.ca,
       cert: opts.cert,
       key: opts.key,
-      rejectUnauthorized: opts.rejectUnauthorized
-    })
+      rejectUnauthorized: opts.rejectUnauthorized,
+    });
 
-    const url = cluster?.server + this.path + '?' + params
+    const url = cluster?.server + this.path + '?' + params;
 
-    const headers = new Headers()
+    const headers = new Headers();
 
     for (const key in opts.headers) {
-      const header = opts.headers[key]?.toString()
+      const header = opts.headers[key]?.toString();
       if (header !== undefined) {
-        headers.set(key, header)
+        headers.set(key, header);
       }
     }
-    console.log(url)
     const fetchRequest = fetch(url, {
       method: 'GET',
       headers,
       signal: this.controller.signal,
-      agent: httpsAgent
-    })
+      agent: httpsAgent,
+    });
     fetchRequest.then((response) => {
       if (response.body !== null) {
-        this.events.emit('connect')
-        response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false })
+        this.events.emit('connect');
+        response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false });
         response.body
           .on('close', async () => {
+            this.events.emit(EVENT.CONNECT, url);
             if (this.started) {
-              this.started = false
+              this.started = false;
               setTimeout(async () => {
-                console.log(`Retrying request to ${url}`)
                 if (!this.controller.signal.aborted) {
-                  await this.makeWatchRequest()
+                  await this.makeWatchRequest();
                 }
-              }, 1000)
+              }, 1000);
             }
           })
           .on('error', async (err: any) => {
             if (err?.type !== 'aborted') {
-              console.log(err, 'Caught error here!')
-              this.events.emit('error', err)
+              this.events.emit(EVENT.ERROR, err);
             } else {
-              console.log('Abort all good')
+              this.events.emit(EVENT.USER_ABORT, err);
             }
-          })
+          });
       }
-    })
+    });
     fetchRequest.catch((error) => {
-      console.log({ error }, 'Error with main watch request')
-      this.events.emit(EVENT.ERROR, error)
-      httpsAgent.destroy()
-    })
+      this.events.emit(EVENT.ERROR, error);
+      httpsAgent.destroy();
+    });
   }
 
   private handleError(err) {
-    this.events.emit(EVENT.ERROR, err)
+    this.events.emit(EVENT.ERROR, err);
   }
 
   private watchHandler(phase: string, obj: T, watchObj?: any): void {
     switch (phase) {
       case EVENT.ADDED:
-        this.cache && this.cache.addOrUpdateObject(obj)
-        this.events.emit(phase, obj)
-        break
+        this.cache && this.cache.addOrUpdateObject(obj);
+        this.events.emit(phase, obj);
+        break;
       case EVENT.UPDATED:
-        this.cache && this.cache.addOrUpdateObject(obj)
-        this.events.emit(phase, obj)
-        break
+        this.cache && this.cache.addOrUpdateObject(obj);
+        this.events.emit(phase, obj);
+        break;
       case EVENT.DELETED:
-        this.cache && this.cache.deleteObject(obj)
-        this.events.emit(phase, obj)
-        break
+        this.cache && this.cache.deleteObject(obj);
+        this.events.emit(phase, obj);
+        break;
       case EVENT.BOOKMARK:
         // nothing to do, here for documentation, mostly.
         if (watchObj.object?.metadata?.resourceVersion) {
-          this.resourceVersion = watchObj.object?.metadata?.resourceVersion
-        } else {
-          console.log('BOOKMARK with no resourceVersion')
+          this.resourceVersion = watchObj.object?.metadata?.resourceVersion;
         }
-        break
+        this.events.emit(phase, obj);
+        break;
       case EVENT.ERROR:
-        const error: any = obj
+        const error: any = obj;
         if (error.code !== 410) {
-          this.events.emit(phase, obj)
+          this.events.emit(phase, obj);
         } else {
-          this.resourceVersion = ''
-          this.stop()
+          this.resourceVersion = '';
+          this.stop();
           this.start().then(() => {
-            console.log('Restarted due to 410')
-          })
+            this.events.emit(EVENT.ERROR, 'Restarted due to 410');
+          });
         }
-        break
+        break;
     }
   }
 }
