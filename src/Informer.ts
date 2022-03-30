@@ -17,6 +17,7 @@ export enum EVENT {
   ERROR = 'ERROR',
   BOOKMARK = 'BOOKMARK',
   CONNECT = 'CONNECT',
+  DISCONNECT = 'DISCONNECT',
   USER_ABORT = 'USER_ABORT',
 }
 
@@ -129,19 +130,20 @@ export class Informer<T> {
         headers.set(key, header);
       }
     }
-    const fetchRequest = fetch(url, {
-      method: 'GET',
-      headers,
-      signal: this.controller.signal,
-      agent: httpsAgent,
-    });
-    fetchRequest.then((response) => {
-      if (response.body !== null) {
-        this.events.emit('connect');
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: this.controller.signal,
+        agent: httpsAgent,
+      });
+
+      if (response.body) {
+        this.events.emit(EVENT.CONNECT, url);
         response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false });
         response.body
           .on('close', async () => {
-            this.events.emit(EVENT.CONNECT, url);
+            this.events.emit(EVENT.DISCONNECT, url);
             if (this.started) {
               this.started = false;
               setTimeout(async () => {
@@ -159,11 +161,14 @@ export class Informer<T> {
             }
           });
       }
-    });
-    fetchRequest.catch((error) => {
-      this.events.emit(EVENT.ERROR, error);
+    } catch (err) {
+      if (err?.type !== 'aborted') {
+        this.events.emit(EVENT.ERROR, err);
+      } else {
+        this.events.emit(EVENT.USER_ABORT, err);
+      }
       httpsAgent.destroy();
-    });
+    }
   }
 
   private handleError(err) {
