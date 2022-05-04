@@ -70,12 +70,15 @@ export class Informer<T> {
     }
     this.controller = new AbortController();
     await this.makeWatchRequest();
-    this.started = true;
   }
 
   public stop(): void {
-    this.started = false;
     this.controller.abort();
+    this.started = false;
+  }
+
+  public isStarter(): boolean {
+    return this.started;
   }
 
   private getSetKey(object: k8s.KubernetesObject): string {
@@ -160,6 +163,8 @@ export class Informer<T> {
               this.events.emit(EVENT.USER_ABORT, err);
             }
           });
+
+        this.started = true;
       }
     } catch (err) {
       if (err?.type !== 'aborted') {
