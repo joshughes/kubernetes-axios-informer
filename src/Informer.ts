@@ -77,7 +77,7 @@ export class Informer<T> {
     this.started = false;
   }
 
-  public isStarter(): boolean {
+  public isStarted(): boolean {
     return this.started;
   }
 
