@@ -114,8 +114,6 @@ export class Informer<T extends k8s.KubernetesObject> {
     }
     const cluster = this.kubeConfig.getCurrentCluster();
 
-    const opts: https.RequestOptions = {};
-
     const params: URLSearchParams = new URLSearchParams({
       allowWatchBookmarks: 'true',
       watch: 'true',
@@ -125,39 +123,25 @@ export class Informer<T extends k8s.KubernetesObject> {
       params.append('resourceVersion', this.resourceVersion);
     }
 
-    this.kubeConfig.applyToHTTPSOptions(opts);
-
-    const stream = byline.createStream();
-    const simpleTransform = new SimpleTransform();
-
     const httpsAgent = new Agent({
       keepAlive: true,
-      ca: opts.ca,
-      cert: opts.cert,
-      key: opts.key,
-      rejectUnauthorized: opts.rejectUnauthorized,
     });
-
-    const url = cluster?.server + this.path + '?' + params;
-
-    const headers = new Headers();
-
-    // eslint-disable-next-line guard-for-in
-    for (const key in opts.headers) {
-      const header = opts.headers[key]?.toString();
-      if (header !== undefined) {
-        headers.set(key, header);
-      }
-    }
 
     const options: https.RequestOptions = {
       hostname: cluster?.server,
       path: this.path + '?' + params,
       agent: httpsAgent,
       method: 'GET',
-      headers: opts.headers,
       signal: this.controller.signal,
     };
+
+    this.kubeConfig.applyToHTTPSOptions(options);
+
+    const stream = byline.createStream();
+    const simpleTransform = new SimpleTransform();
+
+    const url = cluster?.server + this.path + '?' + params;
+
     console.log(options);
     try {
       const req = https.request(options, (res) => {

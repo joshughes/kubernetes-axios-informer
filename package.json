@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": "https://github.com/joshughes/kubernetes-axios-informer",
-  "node" : ">=20.12.2",
+  "node": ">=20.12.2",
   "files": [
     "dist/*.ts",
     "dist/*.js",
@@ -73,7 +73,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "byline": "^5.0.0"
+    "byline": "^5.0.0",
+    "ci": "^2.3.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
