@@ -124,8 +124,12 @@ export class Informer<T extends k8s.KubernetesObject> {
       keepAlive: true,
     });
 
+    if(cluster?.server === undefined) {
+      throw new Error('Cluster server is undefined');
+    }
+
     const options: https.RequestOptions = {
-      hostname: cluster?.server,
+      host: new URL(cluster.server).hostname,
       path: this.path + '?' + params,
       agent: httpsAgent,
       method: 'GET',
@@ -139,10 +143,9 @@ export class Informer<T extends k8s.KubernetesObject> {
 
     const url = cluster?.server + this.path + '?' + params;
 
-    console.log(options);
     try {
       const req = https.request(options, (res) => {
-        console.log(`Status Code: ${res.statusCode}`);
+        // console.log(`Status Code: ${res.statusCode}`);
         this.events.emit(EVENT.CONNECT, url);
 
         res.pipe(stream).pipe(simpleTransform).pipe(this.stream, {end: false});
@@ -203,10 +206,12 @@ export class Informer<T extends k8s.KubernetesObject> {
         break;
       case EVENT.BOOKMARK:
         // nothing to do, here for documentation, mostly.
-        if (watchObj.object?.metadata?.resourceVersion) {
+        if( obj?.metadata?.resourceVersion) {
+          this.resourceVersion = obj?.metadata?.resourceVersion;
+        } else if (watchObj.object?.metadata?.resourceVersion) {
           this.resourceVersion = watchObj.object?.metadata?.resourceVersion;
         }
-        this.events.emit(phase, obj);
+        this.events.emit(phase, {obj, watchObj});
         break;
       case EVENT.ERROR:
         const error: any = obj;

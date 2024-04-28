@@ -14,7 +14,7 @@ async function main() {
 
   const listFn = () => api.listNamespace();
 
-  const informer = new Informer('/api/v1/namespaces', listFn, kc, false, '12323');
+  const informer = new Informer('/api/v1/namespaces', listFn, kc, false);
   informer.events.on(EVENT.CONNECT, (event) => {
     console.log({event, connect: 'connect'});
   });
@@ -25,19 +25,23 @@ async function main() {
     console.log({event, abort: 'abort'});
   });
 
-  // informer.stream.on('data', (streamData) => {
-  //   console.log({ streamData });
-  // });
+  informer.stream.on('data', (streamData) => {
+    console.log({ streamData });
+  });
 
-  // informer.events.on(EVENT.ERROR, async (error) => {
-  //   console.log({ error }, 'FOUND ERROR')
-  //   informer.stop()
-  //   await informer.start()
-  // })
+  informer.events.on(EVENT.ERROR, async (error) => {
+    console.log({ error }, 'FOUND ERROR')
+    informer.stop()
+    // await informer.start()
+  })
 
-  // informer.events.on(EVENT.CONNECT, () => {
-  //   console.log('CONNECTED');
-  // });
+  informer.events.on(EVENT.BOOKMARK, (event) => {
+    console.log(`${JSON.stringify(event, null, 2)}`);
+  });
+
+  informer.events.on(EVENT.CONNECT, () => {
+    console.log('CONNECTED');
+  });
 
   informer.start();
 }
