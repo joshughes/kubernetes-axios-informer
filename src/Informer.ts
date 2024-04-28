@@ -1,13 +1,13 @@
+/* eslint-disable max-len */
+/* eslint-disable require-jsdoc */
 /* eslint-disable no-console */
-import { ListPromise } from '@kubernetes/client-node';
-import { Cache } from './Cache';
-import { PassThrough, Transform } from 'stream';
-import { AbortController } from 'node-abort-controller';
-import { Agent } from 'https';
+import {ListPromise} from '@kubernetes/client-node';
+import {Cache} from './Cache';
+import {PassThrough, Transform} from 'stream';
+import {Agent} from 'https';
 import * as k8s from '@kubernetes/client-node';
 import * as https from 'https';
-import fetch, { Headers } from 'node-fetch';
-import * as EventEmitter from 'events';
+import {EventEmitter} from 'events';
 import * as byline from 'byline';
 
 export enum EVENT {
@@ -23,7 +23,7 @@ export enum EVENT {
 
 export class SimpleTransform extends Transform {
   constructor() {
-    super({ objectMode: true });
+    super({objectMode: true});
   }
 
   _transform(chunk: any, encoding: any, callback: any) {
@@ -35,15 +35,15 @@ export class SimpleTransform extends Transform {
         break;
     }
 
-    this.push({ phase, object: data.object, watchObj: data });
+    this.push({phase, object: data.object, watchObj: data});
     callback();
   }
 }
 
-export class Informer<T> {
+export class Informer<T extends k8s.KubernetesObject> {
   private controller: AbortController = new AbortController();
   events = new EventEmitter();
-  stream = new PassThrough({ objectMode: true });
+  stream = new PassThrough({objectMode: true});
   private started = false;
 
   public cache: Cache<T> | null = null;
@@ -53,7 +53,8 @@ export class Informer<T> {
     private listFn: ListPromise<T>,
     private kubeConfig: k8s.KubeConfig,
     private enableCache: boolean = true,
-    private resourceVersion?: string
+    private resourceVersion?: string,
+    private clearResourceVersion: boolean = false
   ) {
     if (this.enableCache) {
       this.cache = new Cache<T>();
@@ -69,6 +70,20 @@ export class Informer<T> {
       return;
     }
     this.controller = new AbortController();
+    this.events.on(EVENT.DISCONNECT, (url) => {
+      console.log(`Disconnected from: ${url}`);
+      if (this.started) {
+        this.started = false;
+        if (this.clearResourceVersion) {
+          this.resourceVersion = undefined;
+        }
+        setTimeout(async () => {
+          if (!this.controller.signal.aborted) {
+            await this.makeWatchRequest();
+          }
+        }, 1000);
+      }
+    });
     await this.makeWatchRequest();
   }
 
@@ -110,7 +125,7 @@ export class Informer<T> {
       params.append('resourceVersion', this.resourceVersion);
     }
 
-    this.kubeConfig.applytoHTTPSOptions(opts);
+    this.kubeConfig.applyToHTTPSOptions(opts);
 
     const stream = byline.createStream();
     const simpleTransform = new SimpleTransform();
@@ -127,46 +142,56 @@ export class Informer<T> {
 
     const headers = new Headers();
 
+    // eslint-disable-next-line guard-for-in
     for (const key in opts.headers) {
       const header = opts.headers[key]?.toString();
       if (header !== undefined) {
         headers.set(key, header);
       }
     }
+
+    const options: https.RequestOptions = {
+      hostname: cluster?.server,
+      path: this.path + '?' + params,
+      agent: httpsAgent,
+      method: 'GET',
+      headers: opts.headers,
+      signal: this.controller.signal,
+    };
+    console.log(options);
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-        signal: this.controller.signal,
-        agent: httpsAgent,
+      const req = https.request(options, (res) => {
+        console.log(`Status Code: ${res.statusCode}`);
+        this.events.emit(EVENT.CONNECT, url);
+
+        res.pipe(stream).pipe(simpleTransform).pipe(this.stream, {end: false});
+
+        res.on('end', () => {
+          this.events.emit(EVENT.DISCONNECT, url);
+        });
+
+        res.on('error', (err: any) => {
+          if (err?.type !== 'aborted') {
+            this.events.emit(EVENT.ERROR, err);
+          } else {
+            this.events.emit(EVENT.USER_ABORT, err);
+          }
+        });
       });
 
-      if (response.body) {
-        this.events.emit(EVENT.CONNECT, url);
-        response.body.pipe(stream).pipe(simpleTransform).pipe(this.stream, { end: false });
-        response.body
-          .on('close', async () => {
-            this.events.emit(EVENT.DISCONNECT, url);
-            if (this.started) {
-              this.started = false;
-              setTimeout(async () => {
-                if (!this.controller.signal.aborted) {
-                  await this.makeWatchRequest();
-                }
-              }, 1000);
-            }
-          })
-          .on('error', async (err: any) => {
-            if (err?.type !== 'aborted') {
-              this.events.emit(EVENT.ERROR, err);
-            } else {
-              this.events.emit(EVENT.USER_ABORT, err);
-            }
-          });
+      req.on('error', (err: any) => {
+        if (err?.type !== 'aborted') {
+          this.events.emit(EVENT.ERROR, err);
+        } else {
+          this.events.emit(EVENT.USER_ABORT, err);
+        }
+        httpsAgent.destroy();
+      });
 
-        this.started = true;
-      }
-    } catch (err) {
+      req.end();
+
+      this.started = true;
+    } catch (err: any) {
       if (err?.type !== 'aborted') {
         this.events.emit(EVENT.ERROR, err);
       } else {
@@ -180,6 +205,7 @@ export class Informer<T> {
     this.events.emit(EVENT.ERROR, err);
   }
 
+  // eslint-disable-next-line max-len
   private watchHandler(phase: string, obj: T, watchObj?: any): void {
     switch (phase) {
       case EVENT.ADDED:
