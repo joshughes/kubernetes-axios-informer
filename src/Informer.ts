@@ -54,7 +54,6 @@ export class Informer<T extends k8s.KubernetesObject> {
     private kubeConfig: k8s.KubeConfig,
     private enableCache: boolean = true,
     private resourceVersion?: string,
-    private clearResourceVersion: boolean = false
   ) {
     if (this.enableCache) {
       this.cache = new Cache<T>();
@@ -74,9 +73,6 @@ export class Informer<T extends k8s.KubernetesObject> {
       console.log(`Disconnected from: ${url}`);
       if (this.started) {
         this.started = false;
-        if (this.clearResourceVersion) {
-          this.resourceVersion = undefined;
-        }
         setTimeout(async () => {
           if (!this.controller.signal.aborted) {
             await this.makeWatchRequest();
@@ -89,6 +85,7 @@ export class Informer<T extends k8s.KubernetesObject> {
 
   public stop(): void {
     this.controller.abort();
+    this.resourceVersion = undefined;
     this.started = false;
   }
 
