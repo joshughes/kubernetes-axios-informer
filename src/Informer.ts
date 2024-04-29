@@ -136,7 +136,7 @@ export class Informer<T extends k8s.KubernetesObject> {
       signal: this.controller.signal,
     };
 
-    this.kubeConfig.applyToHTTPSOptions(options);
+    this.kubeConfig.applytoHTTPSOptions(options);
 
     const stream = byline.createStream();
     const simpleTransform = new SimpleTransform();
