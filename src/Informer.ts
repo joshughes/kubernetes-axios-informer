@@ -85,6 +85,7 @@ export class Informer<T extends k8s.KubernetesObject> {
 
   public stop(): void {
     this.controller.abort();
+    this.resourceVersion = undefined;
     this.started = false;
   }
 
