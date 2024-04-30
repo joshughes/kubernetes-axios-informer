@@ -6,6 +6,21 @@ import * as k8s from '@kubernetes/client-node';
 // import { Stream, Readable, PassThrough } from 'stream'
 import {Informer, EVENT} from './Informer';
 
+async function listClusterTektonTaskRuns(): Promise<any> {
+  const kc = new k8s.KubeConfig();
+  kc.loadFromDefault();
+  const k8sClient = await kc.makeApiClient(k8s.CustomObjectsApi);
+  const taskRuns = await k8sClient.listNamespacedCustomObject(
+    'tekton.dev',
+    'v1beta1',
+    "controltower-dev-ha",
+    'taskruns',
+  );
+
+  return taskRuns;
+
+}
+
 async function main() {
   const kc = new k8s.KubeConfig();
   kc.loadFromDefault();
@@ -14,7 +29,8 @@ async function main() {
 
   const listFn = () => api.listNamespace();
 
-  const informer = new Informer('/api/v1/namespaces', listFn, kc, false);
+  const url = `/apis/tekton.dev/v1beta1/namespaces/controltower-dev-ha/taskruns`;
+  const informer = new Informer(url, listFn, kc, false);
   informer.events.on(EVENT.CONNECT, (event) => {
     console.log({event, connect: 'connect'});
   });

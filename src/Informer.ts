@@ -85,7 +85,6 @@ export class Informer<T extends k8s.KubernetesObject> {
 
   public stop(): void {
     this.controller.abort();
-    this.resourceVersion = undefined;
     this.started = false;
   }
 
@@ -152,6 +151,7 @@ export class Informer<T extends k8s.KubernetesObject> {
 
         res.on('end', () => {
           this.events.emit(EVENT.DISCONNECT, url);
+          httpsAgent.destroy();
         });
 
         res.on('error', (err: any) => {

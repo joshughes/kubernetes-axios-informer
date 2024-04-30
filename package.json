@@ -1,6 +1,6 @@
 {
   "name": "kubernetes-enhanced-informer",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Informer for kubernete based axios",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -49,7 +49,7 @@
     ]
   },
   "devDependencies": {
-    "@kubernetes/client-node": "^0.16.0",
+    "@kubernetes/client-node": "^0.17.0",
     "@types/byline": "4.2.33",
     "@types/jest": "26.0.20",
     "@types/node": "20.12.7",
